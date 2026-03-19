@@ -1,12 +1,8 @@
 
-<div align="center">
-
-<img src="https://raw.githubusercontent.com/your-username/ScriptManager/main/Assets.xcassets/AppIcon.appiconset/icon_256pt.png" width="128" alt="ScriptManager Logo">
-
 # 🚀 ScriptManager
 
-**Turn your CLI scripts into beautiful native macOS apps instantly. Support bash , python, ruby, js  scripts.**  
-*No UI code required. Just add comments.*
+**Turn your CLI scripts into beautiful native macOS GUI apps instantly. Support bash , python, ruby, js  scripts.**  
+*No UI code required. Just add magic comments. Built with 100% SwiftUI.*
 
 [![macOS](https://img.shields.io/badge/macOS-13.0+-000000.svg?style=for-the-badge&logo=apple&logoColor=white)](#)
 [![SwiftUI](https://img.shields.io/badge/SwiftUI-Native-blue.svg?style=for-the-badge&logo=swift&logoColor=white)](#)
@@ -21,7 +17,7 @@
 
 ## 💡 The "Aha!" Moment
 
-Stop writing boilerplate UI code or building complex web dashboards just to share your scripts with your team. With **ScriptManager**, you just write your script, add a few magic comments, and boom—you get a native macOS GUI.
+Stop writing boilerplate UI code or building complex web dashboards just to share your scripts with your team. With **ScriptManager**, you just write your script (Bash, Python, Node.js, Ruby), add a few magic comments, and boom—you get a native macOS GUI instantly.
 
 **Before (Your Script):**
 ```python
@@ -38,38 +34,52 @@ import sys
 
 **After (ScriptManager Auto-Generated UI):**
 
-> 📸 *[Place a high-quality GIF here showing the script code on the right and the auto-generated UI with dropdowns, file pickers, and toggles on the left]*
+> ![](/Users/ou/project/pc_project/ScriptManager/images/scriptmanager2.png)
+>
+> ![](/Users/ou/project/pc_project/ScriptManager/images/scriptmanager1.png)
 
 ---
 
 ## ✨ Features
 
 - 🪄 **Auto UI Generation**: Parses `@Param` comments to automatically generate TextFields, Dropdowns, File Pickers, and Toggles.
-- 💻 **Interactive PTY Terminal**: Built-in console with full Pseudo-Terminal (PTY) support. It handles interactive commands like `mysql`, `ssh`, or `npm init` flawlessly.
+- 💻 **Interactive PTY Terminal**: Built-in console with full Pseudo-Terminal (PTY) support. It handles interactive commands like `sudo`, `mysql`, `ssh`, or `npm init` flawlessly.
 - 📁 **Workspace Management**: Organize your scripts in folders. Real-time file monitoring keeps your UI in sync with your file system.
 - 📝 **Built-in Code Editor**: Edit scripts on the fly with syntax highlighting (Python, Bash, Node.js, Ruby), auto-indentation, and standard shortcuts (`Cmd+S`, `Cmd+/`, `Cmd+F`).
 - 🌍 **Environment Variables**: Inject custom environment variables per script without messing up your global `~/.zshrc`.
-- 🔒 **Privacy First & Native**: 100% native SwiftUI. Runs locally. No electron bloat, no cloud sync, your scripts stay on your machine.
+- 🔒 **Privacy First & Native**: 100% native SwiftUI. Runs locally. No Electron bloat, no cloud sync, your scripts stay on your machine.
 
 ---
 
 ## 📦 Installation
 
-### Option 1: Homebrew (Recommended)
-```bash
-brew install --cask scriptmanager
-```
-
-### Option 2: Direct Download
+### Option 1: Direct Download
 Download the latest `.dmg` file from the [Releases](https://github.com/your-username/ScriptManager/releases) page and drag it to your Applications folder.
 
-### Option 3: Build from Source
+### Option 2: Build from Source
 ```bash
 git clone https://github.com/your-username/ScriptManager.git
 cd ScriptManager
 open ScriptManager.xcodeproj
 # Hit Cmd + R in Xcode to build and run
 ```
+
+---
+
+## ⚠️ Troubleshooting: App is damaged and can't be opened?
+
+Since ScriptManager runs **outside the macOS Sandbox** to provide full terminal execution capabilities and might not be signed with an Apple Developer certificate, macOS Gatekeeper might block it.
+
+If you see an error saying the app is damaged, cannot be opened, or is from an unidentified developer, run the following commands in your Terminal:
+
+```bash
+# 1. Allow apps from anywhere (optional but recommended for unsigned apps)
+sudo spctl --master-disable
+
+# 2. Remove the quarantine attribute from the app (Crucial Step)
+sudo xattr -r -d com.apple.quarantine /Applications/ScriptManager.app
+```
+*Note: Make sure you have moved the app to the `/Applications` folder before running the second command.*
 
 ---
 
@@ -145,7 +155,7 @@ The `@Param` tag is the core of ScriptManager. It follows this strict format sep
 
 For developers interested in the codebase:
 - **Multi-Probe FDA Detection**: Advanced Full Disk Access detection bypassing macOS sandbox caching bugs.
-- **PTY Allocation**: Uses `posix_openpt` and `grantpt` to allocate real pseudo-terminals, capturing ANSI color codes and supporting interactive stdin.
+- **PTY Allocation**: Uses `posix_openpt` and `grantpt` to allocate real pseudo-terminals, capturing ANSI color codes and supporting interactive stdin (like `sudo` password prompts).
 - **Security-Scoped Bookmarks**: Persists workspace access across app restarts without violating App Sandbox rules.
 - **Stream Parsing**: Asynchronously reads only the first few kilobytes of files to extract metadata, ensuring zero lag even with massive log files.
 
@@ -153,7 +163,7 @@ For developers interested in the codebase:
 
 ## 🤝 Contributing
 
-We love contributions! If you'd like to help make ScriptManager even better, please check out our [Contributing Guide](CONTRIBUTING.md).
+We love contributions! If you'd like to help make ScriptManager even better, please check out our[Contributing Guide](CONTRIBUTING.md).
 
 1. Fork the Project
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
@@ -166,25 +176,3 @@ We love contributions! If you'd like to help make ScriptManager even better, ple
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
-
----
-<div align="center">
-Made with ❤️ by [Your Name/Organization]. 
-If you find this project helpful, please consider giving it a ⭐️!
-</div>
-```
-
----
-
-### 第三部分：如何让这个 README 发挥最大效用（给您的建议）
-
-1. **制作高质量的 GIF（最重要的一步）**：
-   - 10k Star 的项目，第一眼视觉冲击力决定了 80% 的转化率。
-   - 建议使用[Cleanshot X](https://cleanshot.com/) 或 [Screen Studio](https://www.screen.studio/) 录制一个 10-15 秒的演示 GIF。
-   - **GIF 内容设计**：左边放一个空白的表单，右边在代码编辑器里敲入 `# @Param: env | choice | true | dev | Env | dev, prod`，敲完按下 `Cmd+S`，左边瞬间弹出一个精美的下拉框。这个画面极具极客美感，能瞬间抓住开发者的心。
-2. **替换占位符**：
-   - 将 `your-username` 替换为您的 GitHub 用户名。
-   - 将 Logo 路径替换为真实的图床路径。
-3. **多渠道分发**：
-   - 带着这个 README 和 GIF，去 **Hacker News (Show HN)**、**Reddit (r/macapps, r/programming, r/swift)**、**Product Hunt** 以及 **V2EX** 发帖。
-   - 标题示例："*Show HN: I built a native macOS app that turns any bash/python script into a GUI tool instantly using comments*"。这种标题在 HN 上极易爆火。
