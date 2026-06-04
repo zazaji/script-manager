@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild *)",
+      "Bash(xargs ls -la)",
+      "Bash(open /Users/ou/Library/Developer/Xcode/DerivedData/ScriptManager-gbjqqbvcceyrzwfbtonoqjqvemqs/Build/Products/Debug/ScriptManager.app)",
+      "Bash(killall ScriptManager)",
+      "Bash(osascript *)"
+    ]
+  }
+}

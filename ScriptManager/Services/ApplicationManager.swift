@@ -8,45 +8,45 @@ public class ApplicationManager {
     
     private init() {}
     
-    /// 异步扫描系统应用目录
+    /// 异步扫描系统应用目录 (架构重构：移除沉重的图标提取和 LaunchServices 校验，实现毫秒级极速扫描)
     public func scanApplications() async -> [ApplicationItem] {
-        print("========== APPLICATION SCAN ==========")
-        let appDirectories = [
-            "/Applications",
-            "/System/Applications",
-            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path
-        ]
-        
-        var foundApps: [ApplicationItem] = []
-        let fileManager = FileManager.default
-        let workspace = NSWorkspace.shared
-        
-        for dirPath in appDirectories {
-            let url = URL(fileURLWithPath: dirPath)
-            print("[Scanning Directory]: \(dirPath)")
+        return await Task.detached(priority: .userInitiated) {
+            print("========== APPLICATION SCAN ==========")
+            let appDirectories = [
+                "/Applications",
+                "/System/Applications",
+                FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path
+            ]
             
-            do {
-                let contents = try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isApplicationKey], options: [.skipsHiddenFiles])
+            let fileManager = FileManager.default
+            var foundApps: [ApplicationItem] = []
+            
+            for dirPath in appDirectories {
+                let url = URL(fileURLWithPath: dirPath)
+                print("[Scanning Directory]: \(dirPath)")
                 
-                for fileURL in contents {
-                    if fileURL.pathExtension.lowercased() == "app" {
+                do {
+                    // 架构级防坑：绝对不要传 .isApplicationKey，否则会触发 LaunchServices 同步阻塞，导致系统级卡死！
+                    let contents = try fileManager.contentsOfDirectory(
+                        at: url,
+                        includingPropertiesForKeys: nil,
+                        options: [.skipsHiddenFiles]
+                    )
+                    
+                    for fileURL in contents where fileURL.pathExtension.lowercased() == "app" {
                         let name = fileManager.displayName(atPath: fileURL.path)
-                        let icon = workspace.icon(forFile: fileURL.path)
-                        
-                        let item = ApplicationItem(url: fileURL, name: name, icon: icon)
-                        foundApps.append(item)
+                        foundApps.append(ApplicationItem(url: fileURL, name: name))
                     }
+                } catch {
+                    print("[ApplicationManager] Error reading directory \(dirPath): \(error)")
                 }
-            } catch {
-                print("[ApplicationManager] Error reading directory \(dirPath): \(error)")
             }
-        }
-        
-        // 按名称排序
-        let sortedApps = foundApps.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
-        print("[Scan Complete]: Found \(sortedApps.count) applications.")
-        print("======================================")
-        return sortedApps
+            
+            let sortedApps = foundApps.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+            print("[Scan Complete]: Found \(sortedApps.count) applications.")
+            print("======================================")
+            return sortedApps
+        }.value
     }
     
     /// 运行指定的应用程序

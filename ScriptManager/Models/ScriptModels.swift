@@ -71,6 +71,7 @@ public struct ScriptItem: Identifiable, Hashable {
     public let type: ScriptType
     public var displayName: String?
     public var scriptDescription: String?
+    public var parametersHint: String?
     
     public init(url: URL) {
         self.url = url
@@ -81,51 +82,62 @@ public struct ScriptItem: Identifiable, Hashable {
         let meta = Self.extractMetadata(from: url)
         self.displayName = meta.name
         self.scriptDescription = meta.desc
+        self.parametersHint = meta.params
     }
     
-    /// 架构级增强：同步提取元数据，用于搜索过滤
-    private static func extractMetadata(from url: URL) -> (name: String?, desc: String?) {
+    private static func extractMetadata(from url: URL) -> (name: String?, desc: String?, params: String?) {
         var extractedName: String?
         var extractedDesc: String?
+        var params: [String] = []
         
         do {
             let fileHandle = try FileHandle(forReadingFrom: url)
             defer { try? fileHandle.close() }
-            // 只读取前 2048 字节，平衡性能与解析完整性
-            if let data = try fileHandle.read(upToCount: 2048),
+            if let data = try fileHandle.read(upToCount: 4096),
                let content = String(data: data, encoding: .utf8) {
                 let lines = content.components(separatedBy: .newlines)
                 for (index, line) in lines.enumerated() {
-                    if index >= 30 { break } // 限制扫描行数
+                    if index >= 50 { break }
                     
                     if let range = line.range(of: "@Name:") {
                         extractedName = line[range.upperBound...].trimmingCharacters(in: .whitespaces)
-                    }
-                    if let range = line.range(of: "@Desc:") {
+                    } else if let range = line.range(of: "@Desc:") {
                         extractedDesc = line[range.upperBound...].trimmingCharacters(in: .whitespaces)
+                    } else if let range = line.range(of: "@Param:") {
+                        let paramStr = line[range.upperBound...].trimmingCharacters(in: .whitespaces)
+                        let parts = paramStr.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+                        if parts.count >= 3 {
+                            let name = parts[0]
+                            let requiredStr = parts[2].lowercased()
+                            let required = (requiredStr == "true" || requiredStr == "1" || requiredStr == "yes")
+                            if required {
+                                params.append("<\(name)>")
+                            } else {
+                                params.append("[\(name)]")
+                            }
+                        } else if parts.count >= 1 {
+                            params.append("[\(parts[0])]")
+                        }
                     }
-                    
-                    if extractedName != nil && extractedDesc != nil { break }
                 }
             }
         } catch {
-            // 静默失败，不影响主流程
+            // 静默失败
         }
-        return (extractedName, extractedDesc)
+        let paramsStr = params.isEmpty ? nil : params.joined(separator: " ")
+        return (extractedName, extractedDesc, paramsStr)
     }
 }
 
-/// 架构级增强：系统应用实体
+/// 架构级重构：移除沉重的 NSImage，仅保留轻量级元数据，实现毫秒级扫描
 public struct ApplicationItem: Identifiable, Hashable {
     public var id: String { url.path }
     public let url: URL
     public let name: String
-    public let icon: NSImage
     
-    public init(url: URL, name: String, icon: NSImage) {
+    public init(url: URL, name: String) {
         self.url = url
         self.name = name
-        self.icon = icon
     }
 }
 
@@ -196,8 +208,13 @@ public class ExecutionSession: Identifiable, ObservableObject {
     @Published public var attributedLogs: NSAttributedString = NSAttributedString()
     private var internalLogs = NSMutableAttributedString()
     
+    // 架构级增强：暴露最新一行日志，供悬浮窗实时滚动显示
+    @Published public var latestLogLine: String = ""
+    
     @Published public var state: ScriptState = .idle
     public var task: ExecutionTaskProtocol?
+    
+    public var tempFileURL: URL?
     
     public init(scriptName: String) {
         self.scriptName = scriptName
@@ -225,11 +242,18 @@ public class ExecutionSession: Identifiable, ObservableObject {
         }
         
         attributedLogs = NSAttributedString(attributedString: internalLogs)
+        
+        // 提取最后一行非空日志，更新悬浮窗状态
+        let lines = text.components(separatedBy: .newlines)
+        if let lastLine = lines.last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) {
+            latestLogLine = lastLine
+        }
     }
     
     public func clearLogs() {
         internalLogs = NSMutableAttributedString()
         attributedLogs = NSAttributedString()
+        latestLogLine = ""
     }
     
     public func sendInput(_ text: String) {
@@ -241,5 +265,78 @@ public class ExecutionSession: Identifiable, ObservableObject {
         task = nil
         state = .idle
         appendLog(Constants.UI.processTerminatedByUser, type: .error)
+        cleanupTempFile()
+    }
+    
+    public func cleanupTempFile() {
+        if let url = tempFileURL {
+            do {
+                if FileManager.default.fileExists(atPath: url.path) {
+                    try FileManager.default.removeItem(at: url)
+                    print("[ExecutionSession] Garbage Collection: Cleaned up temp file at \(url.path)")
+                }
+            } catch {
+                print("[ExecutionSession] Failed to clean up temp file: \(error)")
+            }
+            tempFileURL = nil
+        }
+    }
+}
+
+/// 架构级增强：AI Agent API 类型，支持不同厂商的请求格式
+public enum AIAgentType: String, Codable, CaseIterable {
+    case openAI = "OpenAI Compatible"
+    case anthropic = "Anthropic"
+    case openClaw = "OpenClaw"
+}
+
+/// 架构级增强：动态 AI Agent 配置模型，支持无限扩展与专属快捷键
+public struct AIAgentConfiguration: Identifiable, Codable, Hashable {
+    public var id = UUID()
+    public var name: String
+    public var type: AIAgentType
+    public var endpoint: String
+    public var apiKey: String
+    public var prefix: String
+    public var themeColor: String
+    
+    // 专属全局快捷键
+    public var hotkeyCode: UInt16 = 0
+    public var hotkeyModifiers: UInt32 = 0
+    
+    public init(id: UUID = UUID(), name: String, type: AIAgentType, endpoint: String, apiKey: String = "", prefix: String, themeColor: String = "blue", hotkeyCode: UInt16 = 0, hotkeyModifiers: UInt32 = 0) {
+        self.id = id
+        self.name = name
+        self.type = type
+        self.endpoint = endpoint
+        self.apiKey = apiKey
+        self.prefix = prefix
+        self.themeColor = themeColor
+        self.hotkeyCode = hotkeyCode
+        self.hotkeyModifiers = hotkeyModifiers
+    }
+    
+    public var uiColor: Color {
+        switch themeColor {
+        case "purple": return .purple
+        case "blue": return .blue
+        case "orange": return .orange
+        case "green": return .green
+        case "red": return .red
+        case "gray": return .gray
+        default: return .accentColor
+        }
+    }
+    
+    public var icon: String {
+        switch themeColor {
+        case "purple": return "sparkles"
+        case "blue": return "chevron.left.forwardslash.chevron.right"
+        case "orange": return "ant.fill"
+        case "green": return "leaf.fill"
+        case "red": return "flame.fill"
+        case "gray": return "cpu"
+        default: return "cpu"
+        }
     }
 }

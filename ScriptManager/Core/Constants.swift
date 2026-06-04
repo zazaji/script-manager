@@ -93,6 +93,8 @@ public struct Constants {
         public static var languageLabel: String { localized("language_label", value: "Language") }
         public static var restartRequiredMessage: String { localized("restart_required_message", value: "Please restart the app to apply language changes.") }
         
+        public static var launchAtLoginLabel: String { localized("launch_at_login_label", value: "Launch at Login") }
+        
         public static var welcomeTitle: String { localized("welcome_title", value: "Welcome to Script Manager") }
         public static var welcomeSubtitle: String { localized("welcome_subtitle", value: "Manage, configure, and execute your scripts with an auto-generated UI.") }
         public static var featureAutoUITitle: String { localized("feature_auto_ui_title", value: "Auto UI Generation") }
@@ -139,6 +141,11 @@ public struct Constants {
         public static var rubyPathLabel: String { localized("ruby_path_label", value: "Ruby Path") }
         public static var envPathLabel: String { localized("env_path_label", value: "Environment File (.bashrc/.zshrc)") }
         public static var defaultShellLabel: String { localized("default_shell_label", value: "Default Shell") }
+        
+        public static var terminalEmulatorLabel: String { localized("terminal_emulator_label", value: "Terminal Emulator") }
+        public static var terminalAppTerminal: String { localized("terminal_app_terminal", value: "Terminal.app") }
+        public static var terminalAppiTerm: String { localized("terminal_app_iterm", value: "iTerm2") }
+        
         public static var selectPathButton: String { localized("select_path_button", value: "Select") }
         public static var templateOrSampleLabel: String { localized("template_or_sample_label", value: "Template / Sample") }
         public static var defaultTemplate: String { localized("default_template", value: "Default Template") }
@@ -149,6 +156,38 @@ public struct Constants {
         public static var appPathLabel: String { localized("app_path_label", value: "Application Path") }
         public static var openAppButton: String { localized("open_app_button", value: "Open Application") }
         public static var appInfoTitle: String { localized("app_info_title", value: "Application Info") }
+        
+        public static var launcherSearchPrompt: String { localized("launcher_search_prompt", value: "Search scripts or apps... (e.g. script_name arg1 arg2)") }
+        public static var shortcutLabel: String { localized("shortcut_label", value: "Global Shortcut") }
+
+        public static var aiSettingsTitle: String { localized("ai_settings_title", value: "AI Agents") }
+        
+        // 架构级增强：动态 Agent 管理文案
+        public static var addAgentButton: String { localized("add_agent_button", value: "Add Agent") }
+        public static var addHermesButton: String { localized("add_hermes_button", value: "Add Hermes") }
+        public static var addOpenCodeButton: String { localized("add_opencode_button", value: "Add OpenCode") }
+        public static var addClaudeCodeButton: String { localized("add_claudecode_button", value: "Add Claude Code") }
+        public static var addOpenClawButton: String { localized("add_openclaw_button", value: "Add OpenClaw") }
+        public static var addCustomAgentButton: String { localized("add_custom_agent_button", value: "Add Custom Agent") }
+        
+        public static var agentNameLabel: String { localized("agent_name_label", value: "Name") }
+        public static var agentTypeLabel: String { localized("agent_type_label", value: "API Type") }
+        public static var agentEndpointLabel: String { localized("agent_endpoint_label", value: "Endpoint") }
+        public static var agentApiKeyLabel: String { localized("agent_api_key_label", value: "API Key") }
+        public static var agentPrefixLabel: String { localized("agent_prefix_label", value: "Prefix") }
+        public static var agentThemeLabel: String { localized("agent_theme_label", value: "Theme") }
+        public static var agentShortcutLabel: String { localized("agent_shortcut_label", value: "Shortcut") }
+        
+        public static var aiWorkspaceLabel: String { localized("ai_workspace_label", value: "AI Workspace") }
+        public static var askAIPrompt: String { localized("ask_ai_prompt", value: "Ask AI to plan and execute...") }
+        public static var aiTaskName: String { localized("ai_task_name", value: "AI Task") }
+        public static var backToSearchButton: String { localized("back_to_search_button", value: "Back to Search") }
+
+        // 架构级增强：自动化权限提示文案
+        public static var automationPermissionTitle: String { localized("automation_permission_title", value: "Automation Permission Required") }
+        public static func automationPermissionDeniedMessage(_ app: String) -> String {
+            return String(format: localized("automation_permission_denied_message", value: "Script Manager needs permission to control %@. Please grant permission in System Settings > Privacy & Security > Automation.\n\n(If the system prompt didn't appear, please ensure 'NSAppleEventsUsageDescription' is set in Info.plist)"), app)
+        }
 
         public static func processFinishedFailure(_ code: String) -> String {
             return String(format: localized("process_finished_failure", value: "\n❌ [Process Finished]: Failure (Exit code %@)"), code)

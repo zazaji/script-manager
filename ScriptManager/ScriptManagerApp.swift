@@ -1,12 +1,72 @@
 // ScriptManager/ScriptManagerApp.swift
 import SwiftUI
+import AppKit
+
+// 架构级增强：拦截主窗口关闭事件，改为隐藏，实现后台常驻与秒开
+class MainWindowDelegate: NSObject, NSWindowDelegate {
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        sender.orderOut(nil) // 隐藏窗口而不销毁
+        return false
+    }
+}
+
+// 架构级增强：全面接管 App 生命周期，打造纯粹的启动器体验
+class AppDelegate: NSObject, NSApplicationDelegate {
+    var mainWindowDelegate = MainWindowDelegate()
+    
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // 架构级增强：设置为 accessory 模式，彻底隐藏 Dock 图标和顶部菜单栏
+        // 让 App 成为纯粹的后台/悬浮窗级极客工具
+        NSApp.setActivationPolicy(.accessory)
+        
+        // 启动时默认隐藏主窗口，避免闪烁打扰用户
+        // 架构级修复：彻底摒弃对 "AppKitWindow" 私有类名的脆弱依赖
+        // 通过排除 NSPanel 并检查 canBecomeMain 属性，精准锁定 SwiftUI 主窗口
+        if let window = NSApp.windows.first(where: { !($0 is NSPanel) && $0.canBecomeMain }) {
+            window.delegate = mainWindowDelegate
+            window.orderOut(nil)
+        }
+        
+        // 架构级增强：启动时主动同步系统级的开机自启状态，确保内部状态绝对准确
+        AppStateManager.shared.syncLaunchAtLoginState()
+        
+        // 架构级增强：初始化全局悬浮任务指示器 (Dynamic Island)
+        TaskWidgetManager.shared.setup()
+    }
+    
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return false // 拒绝退出，保持后台运行
+    }
+    
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // 即使没有 Dock 图标，通过其他方式（如 URL Scheme 或活动监视器）唤醒时也能恢复主窗口
+        // 架构级修复：使用健壮的属性过滤替代类名匹配
+        if let window = NSApp.windows.first(where: { !($0 is NSPanel) && $0.canBecomeMain }) {
+            window.makeKeyAndOrderFront(nil)
+        }
+        return true
+    }
+}
 
 @main
 struct ScriptManagerApp: App {
+    // 注入 AppDelegate
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
     @AppStorage("appTheme") private var appTheme: String = "system"
     
     // 架构级防坑：使用 @ObservedObject 观察单例，而不是 @StateObject
     @ObservedObject private var languageManager = AppLanguageManager.shared
+
+    init() {
+        // 架构级增强：在 App 启动时初始化全局快捷键引擎，并绑定唤醒启动器窗口的回调
+        _ = GlobalHotkeyManager.shared
+        GlobalHotkeyManager.shared.mainAction = {
+            Task { @MainActor in
+                LauncherWindowManager.shared.show()
+            }
+        }
+    }
 
     var body: some Scene {
         WindowGroup {

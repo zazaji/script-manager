@@ -1,9 +1,8 @@
 // ScriptManager/Services/AppStateManager.swift
 import Foundation
 import Combine
+import ServiceManagement
 
-/// 架构级增强：全局状态管理器，负责持久化常用工作区、常用脚本、自定义脚本、收藏脚本和环境变量
-/// 引入 Security-Scoped Bookmarks 机制，彻底解决 Sandbox 权限问题
 public class AppStateManager: ObservableObject {
     public static let shared = AppStateManager()
     
@@ -12,17 +11,31 @@ public class AppStateManager: ObservableObject {
     @Published public var customScripts: [String] = []
     @Published public var favoriteScripts: [String] = []
     
-    // 存储每个脚本的环境变量配置
     @Published public var scriptEnvironments: [String:[ScriptEnvironmentVariable]] = [:]
     
-    // 架构级增强：自定义执行环境路径
     @Published public var pythonPath: String = "" { didSet { saveState() } }
     @Published public var nodePath: String = "" { didSet { saveState() } }
     @Published public var rubyPath: String = "" { didSet { saveState() } }
     @Published public var envPath: String = "" { didSet { saveState() } }
     @Published public var defaultShell: String = "bash" { didSet { saveState() } }
     
-    // 存储 Security-Scoped Bookmark Data
+    @Published public var terminalEmulator: String = "Terminal" { didSet { saveState() } }
+    
+    @Published public var launchAtLogin: Bool = false
+    
+    // 架构级重构：全面拥抱动态 API 网关模式，支持无限扩展的 Agent 列表
+    @Published public var aiAgents: [AIAgentConfiguration] = [] { 
+        didSet { 
+            saveState()
+            updateAgentHotkeys()
+        } 
+    }
+    
+    @Published public var aiWorkspacePath: String = "~/temp_projects" { didSet { saveState() } }
+    
+    // 架构级增强：AI 任务历史记录，按 Agent ID 分类存储
+    @Published public var aiTaskHistory: [String: [String]] = [:] { didSet { saveState() } }
+    
     private var bookmarks:[String: Data] = [:]
     
     private let defaults = UserDefaults.standard
@@ -43,19 +56,52 @@ public class AppStateManager: ObservableObject {
         rubyPath = defaults.string(forKey: "rubyPath") ?? ""
         envPath = defaults.string(forKey: "envPath") ?? ""
         defaultShell = defaults.string(forKey: "defaultShell") ?? "bash"
+        terminalEmulator = defaults.string(forKey: "terminalEmulator") ?? "Terminal"
+        
+        // 架构级防坑：平滑迁移旧的硬编码配置到动态列表，确保用户数据不丢失
+        if let data = defaults.data(forKey: "aiAgents"), let decoded = try? JSONDecoder().decode([AIAgentConfiguration].self, from: data) {
+            aiAgents = decoded
+        } else {
+            let oldHermes = defaults.string(forKey: "hermesEndpoint")
+            if oldHermes != nil {
+                aiAgents = [
+                    AIAgentConfiguration(name: "Hermes", type: .openAI, endpoint: defaults.string(forKey: "hermesEndpoint") ?? "http://127.0.0.1:8642/v1/chat/completions", apiKey: defaults.string(forKey: "hermesApiKey") ?? "", prefix: defaults.string(forKey: "hermesPrefix") ?? ">", themeColor: "purple"),
+                    AIAgentConfiguration(name: "OpenCode", type: .openAI, endpoint: defaults.string(forKey: "opencodeEndpoint") ?? "http://127.0.0.1:4096/v1/chat/completions", apiKey: defaults.string(forKey: "opencodeApiKey") ?? "", prefix: defaults.string(forKey: "opencodePrefix") ?? "/", themeColor: "blue"),
+                    AIAgentConfiguration(name: "Claude Code", type: .openAI, endpoint: defaults.string(forKey: "claudeCodeEndpoint") ?? "http://127.0.0.1:8000/v1/chat/completions", apiKey: defaults.string(forKey: "claudeCodeApiKey") ?? "", prefix: defaults.string(forKey: "claudeCodePrefix") ?? "\\", themeColor: "orange")
+                ]
+            } else {
+                // 默认开箱即用的四大 Agent
+                aiAgents = [
+                    AIAgentConfiguration(name: "Hermes", type: .openAI, endpoint: "http://127.0.0.1:8642/v1/chat/completions", prefix: ">", themeColor: "purple"),
+                    AIAgentConfiguration(name: "OpenCode", type: .openAI, endpoint: "http://127.0.0.1:4096/v1/chat/completions", prefix: "/", themeColor: "blue"),
+                    AIAgentConfiguration(name: "Claude Code", type: .openAI, endpoint: "http://127.0.0.1:8000/v1/chat/completions", prefix: "\\", themeColor: "orange"),
+                    AIAgentConfiguration(name: "OpenClaw", type: .openClaw, endpoint: "http://127.0.0.1:3000/v1/responses", prefix: "@", themeColor: "red")
+                ]
+            }
+        }
+        
+        aiWorkspacePath = defaults.string(forKey: "aiWorkspacePath") ?? ""
+        if aiWorkspacePath.isEmpty { aiWorkspacePath = "~/temp_projects" }
+        
+        aiTaskHistory = defaults.dictionary(forKey: "aiTaskHistory") as? [String: [String]] ?? [:]
         
         if let envData = defaults.data(forKey: "scriptEnvironments"),
            let decoded = try? JSONDecoder().decode([String:[ScriptEnvironmentVariable]].self, from: envData) {
             scriptEnvironments = decoded
         }
         
-        // 恢复所有书签的访问权限，突破沙盒限制
+        if #available(macOS 13.0, *) {
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+        }
+        
         for (path, data) in bookmarks {
             restoreAccess(for: path, with: data)
         }
+        
+        // 初始化时注册所有专属快捷键
+        updateAgentHotkeys()
     }
     
-    /// 架构级防坑：改为 public，允许在视图消失等生命周期节点强制调用，并加入 synchronize 确保立即落盘
     public func saveState() {
         defaults.set(recentWorkspaces, forKey: "recentWorkspaces")
         defaults.set(frequentScripts, forKey: "frequentScripts")
@@ -68,13 +114,84 @@ public class AppStateManager: ObservableObject {
         defaults.set(rubyPath, forKey: "rubyPath")
         defaults.set(envPath, forKey: "envPath")
         defaults.set(defaultShell, forKey: "defaultShell")
+        defaults.set(terminalEmulator, forKey: "terminalEmulator")
+        
+        // 保存动态 AI Agent 列表
+        if let encoded = try? JSONEncoder().encode(aiAgents) {
+            defaults.set(encoded, forKey: "aiAgents")
+        }
+        
+        defaults.set(aiWorkspacePath, forKey: "aiWorkspacePath")
+        defaults.set(aiTaskHistory, forKey: "aiTaskHistory")
         
         if let encoded = try? JSONEncoder().encode(scriptEnvironments) {
             defaults.set(encoded, forKey: "scriptEnvironments")
         }
         
-        // 强制立即同步到磁盘，防止 App 意外退出或快速关闭导致的数据丢失
         defaults.synchronize()
+    }
+    
+    /// 架构级增强：动态注册所有 Agent 的专属快捷键
+    public func updateAgentHotkeys() {
+        GlobalHotkeyManager.shared.unregisterAllAgentHotkeys()
+        
+        for (index, agent) in aiAgents.enumerated() {
+            if agent.hotkeyCode != 0 && agent.hotkeyModifiers != 0 {
+                GlobalHotkeyManager.shared.registerAgentHotkey(id: index + 100, keyCode: agent.hotkeyCode, modifiers: agent.hotkeyModifiers) {
+                    Task { @MainActor in
+                        // 专属快捷键唤醒时，自动填入该 Agent 的前缀，实现秒级聚焦
+                        LauncherViewModel.shared.searchText = agent.prefix
+                        LauncherWindowManager.shared.show()
+                    }
+                }
+            }
+        }
+    }
+    
+    /// 架构级增强：添加 AI 任务历史记录，自动去重并限制最大 50 条
+    public func addAITaskHistory(agentID: String, prompt: String) {
+        let cleanPrompt = prompt.trimmingCharacters(in: .whitespaces)
+        guard !cleanPrompt.isEmpty else { return }
+        
+        var history = aiTaskHistory[agentID] ?? []
+        // 去重：如果已存在相同的 prompt，先移除它
+        history.removeAll { $0 == cleanPrompt }
+        // 插入到队首
+        history.insert(cleanPrompt, at: 0)
+        // 限制最多 50 条
+        if history.count > 50 {
+            history = Array(history.prefix(50))
+        }
+        
+        aiTaskHistory[agentID] = history
+    }
+    
+    public func syncLaunchAtLoginState() {
+        if #available(macOS 13.0, *) {
+            DispatchQueue.main.async {
+                self.launchAtLogin = SMAppService.mainApp.status == .enabled
+            }
+        }
+    }
+    
+    public func setLaunchAtLogin(_ enabled: Bool) {
+        if #available(macOS 13.0, *) {
+            do {
+                if enabled {
+                    try SMAppService.mainApp.register()
+                    print("[AppStateManager] Successfully registered Launch at Login.")
+                } else {
+                    try SMAppService.mainApp.unregister()
+                    print("[AppStateManager] Successfully unregistered Launch at Login.")
+                }
+                launchAtLogin = enabled
+            } catch {
+                print("[AppStateManager] Failed to toggle launch at login: \(error)")
+                launchAtLogin = SMAppService.mainApp.status == .enabled
+            }
+        } else {
+            print("[AppStateManager] Launch at login requires macOS 13.0+")
+        }
     }
     
     public func addWorkspace(_ url: URL) {
@@ -136,8 +253,6 @@ public class AppStateManager: ObservableObject {
     public var topFrequentScripts: [String] {
         frequentScripts.sorted { $0.value > $1.value }.prefix(10).map { $0.key }
     }
-    
-    // MARK: - Security-Scoped Bookmarks
     
     private func saveBookmark(for url: URL) {
         do {

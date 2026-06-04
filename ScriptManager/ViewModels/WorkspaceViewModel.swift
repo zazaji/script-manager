@@ -5,6 +5,9 @@ import Combine
 
 @MainActor
 public class WorkspaceViewModel: ObservableObject {
+    // 架构级增强：升级为单例，供全局启动器共享数据，避免重复扫描
+    public static let shared = WorkspaceViewModel()
+    
     public enum SidebarTab {
         case frequent
         case custom
@@ -50,7 +53,10 @@ public class WorkspaceViewModel: ObservableObject {
             return applications
         } else {
             return applications.filter { item in
-                PinyinHelper.isMatch(text: item.name, searchText: searchText)
+                PinyinHelper.isMatch(
+                    text: item.name,
+                    searchText: searchText
+                )
             }
         }
     }
@@ -61,19 +67,25 @@ public class WorkspaceViewModel: ObservableObject {
             return items
         } else {
             return items.filter { item in
-                // 1. 匹配文件名
-                let matchFileName = PinyinHelper.isMatch(text: item.name, searchText: searchText)
-                // 2. 匹配脚本内的 @Name
-                let matchDisplayName = PinyinHelper.isMatch(text: item.displayName ?? "", searchText: searchText)
-                // 3. 匹配脚本内的 @Desc
-                let matchDesc = PinyinHelper.isMatch(text: item.scriptDescription ?? "", searchText: searchText)
+                let matchFileName = PinyinHelper.isMatch(
+                    text: item.name,
+                    searchText: searchText
+                )
+                let matchDisplayName = PinyinHelper.isMatch(
+                    text: item.displayName ?? "",
+                    searchText: searchText
+                )
+                let matchDesc = PinyinHelper.isMatch(
+                    text: item.scriptDescription ?? "",
+                    searchText: searchText
+                )
                 
                 return matchFileName || matchDisplayName || matchDesc
             }
         }
     }
     
-    /// 聚合所有脚本，供详情页查找
+    /// 聚合所有脚本，供详情页和启动器查找
     public var allScripts: [ScriptItem] {
         var all = scripts
         all.append(contentsOf: customScriptItems)
@@ -85,11 +97,23 @@ public class WorkspaceViewModel: ObservableObject {
         return Array(unique.values)
     }
     
-    public init() {
-        // 架构级修复：使用 Task 确保初始化逻辑不在视图更新周期内触发发布
+    // 架构级增强：私有化 init，强制使用单例
+    private init() {
         Task { @MainActor in
             loadCustomAndFrequentScripts()
             loadApplications()
+            
+            // 自动加载最近一次工作区，解决启动器在主界面显示前呼出时，工作区未加载的致命 Bug
+            let appState = AppStateManager.shared
+            if self.selectedWorkspacePath == nil,
+               let first = appState.recentWorkspaces.first {
+                self.selectedWorkspacePath = first
+                WorkspaceManager.shared.startMonitoring(
+                    url: URL(fileURLWithPath: first)
+                )
+                self.scanWorkspace(url: URL(fileURLWithPath: first))
+            }
+            
             setupBindings()
         }
     }
@@ -103,7 +127,10 @@ public class WorkspaceViewModel: ObservableObject {
             .store(in: &cancellables)
         
         WorkspaceManager.shared.workspaceChanged
-            .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
+            .debounce(
+                for: .milliseconds(500),
+                scheduler: RunLoop.main
+            )
             .sink { [weak self] _ in
                 self?.refresh()
             }
@@ -122,11 +149,13 @@ public class WorkspaceViewModel: ObservableObject {
         let state = AppStateManager.shared
         self.customScriptItems = state.customScripts.compactMap { path in
             let url = URL(fileURLWithPath: path)
-            return FileManager.default.fileExists(atPath: path) ? ScriptItem(url: url) : nil
+            return FileManager.default.fileExists(atPath: path) ? 
+                ScriptItem(url: url) : nil
         }
         self.frequentScriptItems = state.topFrequentScripts.compactMap { path in
             let url = URL(fileURLWithPath: path)
-            return FileManager.default.fileExists(atPath: path) ? ScriptItem(url: url) : nil
+            return FileManager.default.fileExists(atPath: path) ? 
+                ScriptItem(url: url) : nil
         }
     }
     
@@ -171,15 +200,27 @@ public class WorkspaceViewModel: ObservableObject {
         }
     }
     
-    public func createNewScript(name: String, type: ScriptType, content: String? = nil) {
+    public func createNewScript(
+        name: String,
+        type: ScriptType,
+        content: String? = nil
+    ) {
         guard let path = selectedWorkspacePath else { return }
         let workspaceURL = URL(fileURLWithPath: path)
         
         do {
-            _ = try WorkspaceManager.shared.createScript(at: workspaceURL, name: name, type: type, content: content)
+            _ = try WorkspaceManager.shared.createScript(
+                at: workspaceURL,
+                name: name,
+                type: type,
+                content: content
+            )
             refresh()
         } catch {
-            print("[WorkspaceViewModel] Failed to create script: \(error.localizedDescription)")
+            print(
+                "[WorkspaceViewModel] Create failed: "
+                + error.localizedDescription
+            )
         }
     }
     
@@ -201,7 +242,7 @@ public class WorkspaceViewModel: ObservableObject {
                     try WorkspaceManager.shared.createSampleScripts(at: url)
                     self.refresh()
                 } catch {
-                    print("[WorkspaceViewModel] Failed to generate samples: \(error)")
+                    print("[WorkspaceViewModel] Samples failed: \(error)")
                 }
             }
         } else {
@@ -211,7 +252,7 @@ public class WorkspaceViewModel: ObservableObject {
                 try WorkspaceManager.shared.createSampleScripts(at: url)
                 self.refresh()
             } catch {
-                print("[WorkspaceViewModel] Failed to generate samples: \(error)")
+                print("[WorkspaceViewModel] Samples failed: \(error)")
             }
         }
     }
@@ -229,7 +270,10 @@ public class WorkspaceViewModel: ObservableObject {
                 try FileManager.default.removeItem(at: script.url)
                 refresh()
             } catch {
-                print("[WorkspaceViewModel] Failed to delete script: \(error.localizedDescription)")
+                print(
+                    "[WorkspaceViewModel] Delete failed: "
+                    + error.localizedDescription
+                )
             }
         }
     }
@@ -239,7 +283,11 @@ public class WorkspaceViewModel: ObservableObject {
         var foundScripts: [ScriptItem] = []
         
         do {
-            let contents = try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)
+            let contents = try fileManager.contentsOfDirectory(
+                at: url,
+                includingPropertiesForKeys: nil,
+                options: .skipsHiddenFiles
+            )
             let supportedExtensions = ["sh", "py", "js", "rb"]
             
             for fileURL in contents {
@@ -250,7 +298,7 @@ public class WorkspaceViewModel: ObservableObject {
             }
             self.scripts = foundScripts.sorted(by: { $0.name < $1.name })
         } catch {
-            print("[Scan Error]: Failed to read directory contents. Error: \(error)")
+            print("[Scan Error]: Failed: \(error)")
         }
     }
 }
