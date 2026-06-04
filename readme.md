@@ -43,6 +43,8 @@ import sys
 ## ✨ Features
 
 - 🪄 **Auto UI Generation**: Parses `@Param` comments to automatically generate TextFields, Dropdowns, File Pickers, and Toggles.
+- ⌨️ **Quick Launcher (Spotlight/Alfred-style)**: Summon a global overlay with `Option+Space` to instantly search, filter, and launch scripts, macOS apps, or AI agents. Press `Enter` to run in system terminal, `Cmd+Enter` to run in-app. Supports fuzzy Pinyin search.
+- 🤖 **AI Agent Integration**: Trigger AI agents from the launcher with custom prefixes (e.g., `>`, `/`, `@`). Chat inline with streaming responses, history, and per-agent hotkeys.
 - 💻 **Interactive PTY Terminal**: Built-in console with full Pseudo-Terminal (PTY) support. It handles interactive commands like `sudo`, `mysql`, `ssh`, or `npm init` flawlessly.
 - 📁 **Workspace Management**: Organize your scripts in folders. Real-time file monitoring keeps your UI in sync with your file system.
 - 📝 **Built-in Code Editor**: Edit scripts on the fly with syntax highlighting (Python, Bash, Node.js, Ruby), auto-indentation, and standard shortcuts (`Cmd+S`, `Cmd+/`, `Cmd+F`).
@@ -151,13 +153,27 @@ The `@Param` tag is the core of ScriptManager. It follows this strict format sep
 
 ---
 
+## ⚡ Quick Launcher
+
+ScriptManager features a **Spotlight/Alfred-style global overlay** for instant access to your scripts, applications, and AI agents.
+
+- **Summon**: Press `Option+Space` from anywhere (even when ScriptManager is in the background).
+- **Search**: Start typing to filter scripts, macOS apps, and AI tasks. Supports Pinyin fuzzy matching.
+- **Run**: `Enter` runs in your system terminal (Terminal.app or iTerm2). `Cmd+Enter` runs inside the built-in PTY terminal.
+- **AI Agents**: Type an agent prefix (e.g., `>`, `/`, `@`) to chat with AI agents inline.
+- **Tab Autofill**: Press `Tab` to autocomplete the selected item's name into the search field.
+
+---
+
 ## 🛠️ Architecture Highlights
 
 For developers interested in the codebase:
+- **Global Quick Launcher**: Carbon-based `RegisterEventHotKey` API for `Option+Space` global shortcut (works even when app is backgrounded). Smart multi-monitor positioning via `NSPanel` at `.popUpMenu` level with frosted-glass blur.
 - **Multi-Probe FDA Detection**: Advanced Full Disk Access detection bypassing macOS sandbox caching bugs.
 - **PTY Allocation**: Uses `posix_openpt` and `grantpt` to allocate real pseudo-terminals, capturing ANSI color codes and supporting interactive stdin (like `sudo` password prompts).
 - **Security-Scoped Bookmarks**: Persists workspace access across app restarts without violating App Sandbox rules.
 - **Stream Parsing**: Asynchronously reads only the first few kilobytes of files to extract metadata, ensuring zero lag even with massive log files.
+- **Pinyin Search**: `CFStringTransform`-based fuzzy Chinese Pinyin matching for quick script discovery from the launcher.
 
 ---
 
