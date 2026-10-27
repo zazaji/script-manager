@@ -110,3 +110,15 @@
 "guide_step1" = "1. 在脚本中添加 @Param 等注释。";
 "guide_step2" = "2. 应用会自动为您生成配置界面。";
 "guide_step3" = "3. 点击运行，即可使用配置好的参数执行。";
+"launcher_search_prompt" = "搜索脚本或应用...（=公式，脚本名 参数1 参数2）";
+"formula_input_hint" = "输入表达式进行计算，如 =(1+2)*sqrt(4)";
+"formula_copy_hint" = "按回车复制结果";
+"formula_error_unexpected_char" = "无法识别的字符 '%@'";
+"formula_error_incomplete" = "表达式不完整";
+"formula_error_trailing" = "表达式末尾有多余内容";
+"formula_error_unknown_function" = "未知函数 '%@'";
+"formula_error_invalid_number" = "无效数字 '%@'";
+"formula_error_arg_count" = "函数 '%@' 参数数量错误";
+"formula_error_div_zero" = "除数不能为 0";
+"formula_error_factorial" = "阶乘仅支持 0 到 170 的整数";
+"formula_error_math" = "数学错误（NaN 或超出范围）";

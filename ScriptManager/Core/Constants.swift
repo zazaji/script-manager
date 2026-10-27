@@ -157,7 +157,7 @@ public struct Constants {
         public static var openAppButton: String { localized("open_app_button", value: "Open Application") }
         public static var appInfoTitle: String { localized("app_info_title", value: "Application Info") }
         
-        public static var launcherSearchPrompt: String { localized("launcher_search_prompt", value: "Search scripts or apps... (e.g. script_name arg1 arg2)") }
+        public static var launcherSearchPrompt: String { localized("launcher_search_prompt", value: "Search scripts or apps... (=formula, script_name arg1 arg2)") }
         public static var shortcutLabel: String { localized("shortcut_label", value: "Global Shortcut") }
 
         public static var aiSettingsTitle: String { localized("ai_settings_title", value: "AI Agents") }
@@ -182,6 +182,35 @@ public struct Constants {
         public static var askAIPrompt: String { localized("ask_ai_prompt", value: "Ask AI to plan and execute...") }
         public static var aiTaskName: String { localized("ai_task_name", value: "AI Task") }
         public static var backToSearchButton: String { localized("back_to_search_button", value: "Back to Search") }
+
+        // 公式计算（启动器 = 前缀）：错误文案集中把 FormulaError 映射为本地化字符串
+        public static var formulaInputHint: String { localized("formula_input_hint", value: "Type an expression to calculate, e.g. =(1+2)*sqrt(4)") }
+        public static var formulaCopyHint: String { localized("formula_copy_hint", value: "Press Enter to copy the result") }
+
+        public static func formulaErrorText(_ error: FormulaEvaluator.FormulaError) -> String {
+            switch error {
+            case .emptyExpression:
+                return formulaInputHint
+            case .unexpectedCharacter(let ch):
+                return String(format: localized("formula_error_unexpected_char", value: "Unexpected character '%@'"), String(ch))
+            case .unexpectedEnd:
+                return localized("formula_error_incomplete", value: "Incomplete expression")
+            case .trailingContent:
+                return localized("formula_error_trailing", value: "Unexpected content at the end of expression")
+            case .unknownFunction(let name):
+                return String(format: localized("formula_error_unknown_function", value: "Unknown function '%@'"), name)
+            case .invalidNumber(let value):
+                return String(format: localized("formula_error_invalid_number", value: "Invalid number '%@'"), value)
+            case .invalidArgumentCount(let name):
+                return String(format: localized("formula_error_arg_count", value: "Wrong number of arguments for '%@'"), name)
+            case .divisionByZero:
+                return localized("formula_error_div_zero", value: "Division by zero")
+            case .factorialDomain:
+                return localized("formula_error_factorial", value: "Factorial only supports integers from 0 to 170")
+            case .mathError:
+                return localized("formula_error_math", value: "Math error (NaN or out of range)")
+            }
+        }
 
         // 架构级增强：自动化权限提示文案
         public static var automationPermissionTitle: String { localized("automation_permission_title", value: "Automation Permission Required") }

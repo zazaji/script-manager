@@ -8,6 +8,14 @@ public enum LauncherItemType {
     case script(ScriptItem)
     case application(ApplicationItem)
     case aiTask(prompt: String, agentID: String)
+    case formula(expression: String, result: String?)
+}
+
+/// 启动器刷新按钮的三态反馈：空闲 → 转圈 → 刷新完毕
+public enum LauncherRefreshState {
+    case idle
+    case refreshing
+    case completed
 }
 
 public struct LauncherItem: Identifiable {
@@ -35,6 +43,7 @@ public class LauncherViewModel: ObservableObject {
     
     @Published public var items: [LauncherItem] = []
     @Published public var selectedIndex: Int = 0
+    @Published public var refreshState: LauncherRefreshState = .idle
     
     @Published public var currentSession: ExecutionSession? = nil {
         didSet {
@@ -87,13 +96,32 @@ public class LauncherViewModel: ObservableObject {
         if currentSession != nil {
             return
         }
-        
+
         if searchText == "" {
             filterItems()
         } else {
             searchText = ""
         }
         selectedIndex = 0
+    }
+
+    /// 启动器的搜索结果同时依赖工作区脚本和应用列表，refreshAll() 保证两侧都重扫、
+    /// 不受主界面当前标签页影响（refresh() 只按 currentTab 二选一，这是修过的真实 bug）
+    public func refreshData() {
+        guard refreshState != .refreshing else { return }
+        withAnimation(.easeIn(duration: 0.15)) { refreshState = .refreshing }
+
+        Task {
+            WorkspaceViewModel.shared.refreshAll()
+            filterItems()
+
+            // 应用扫描是异步的，转圈最短停留 1s 保证反馈可感知
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            withAnimation(.easeOut(duration: 0.2)) { refreshState = .completed }
+            // 完成态绿色保持 5 秒
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            withAnimation(.easeOut(duration: 0.3)) { refreshState = .idle }
+        }
     }
     
     public func filterItems() {
@@ -145,6 +173,14 @@ public class LauncherViewModel: ObservableObject {
             }
             
             self.items = newItems
+            self.selectedIndex = 0
+            return
+        }
+
+        // 公式计算：= / ＝ 前缀触发，纯本地求值；置于 Agent 匹配之后，自定义 Agent 前缀保持最高优先级
+        if searchText.hasPrefix("=") || searchText.hasPrefix("＝") {
+            let expression = String(searchText.dropFirst()).trimmingCharacters(in: .whitespaces)
+            self.items = [makeFormulaItem(expression: expression)]
             self.selectedIndex = 0
             return
         }
@@ -225,6 +261,39 @@ public class LauncherViewModel: ObservableObject {
         }
     }
     
+    /// 公式行：成功时 name 即结果值；空输入/失败时 name 为提示或错误文案，result 为 nil（回车不动作）
+    private func makeFormulaItem(expression: String) -> LauncherItem {
+        func base(name: String, result: String?, description: String?, hint: String?) -> LauncherItem {
+            LauncherItem(
+                id: "formula_current",
+                path: "formula",
+                type: .formula(expression: expression, result: result),
+                name: name,
+                iconName: "equal.circle",
+                iconColor: .orange,
+                description: description,
+                parametersHint: hint
+            )
+        }
+
+        if expression.isEmpty {
+            return base(name: Constants.UI.formulaInputHint, result: nil, description: nil, hint: nil)
+        }
+        do {
+            let result = FormulaEvaluator.format(try FormulaEvaluator.evaluate(expression))
+            return base(
+                name: result,
+                result: result,
+                description: expression,
+                hint: Constants.UI.formulaCopyHint
+            )
+        } catch let error as FormulaEvaluator.FormulaError {
+            return base(name: Constants.UI.formulaErrorText(error), result: nil, description: expression, hint: nil)
+        } catch {
+            return base(name: error.localizedDescription, result: nil, description: expression, hint: nil)
+        }
+    }
+
     public func moveUp() {
         if selectedIndex > 0 {
             selectedIndex -= 1
@@ -253,6 +322,8 @@ public class LauncherViewModel: ObservableObject {
             } else {
                 fillText = prompt
             }
+        case .formula(let expression, _):
+            fillText = "=" + expression
         }
         
         if !searchText.hasPrefix(fillText) {
@@ -330,6 +401,13 @@ public class LauncherViewModel: ObservableObject {
         case .aiTask(let prompt, let agentID):
             guard !prompt.isEmpty else { return }
             executeAITaskInline(prompt: prompt, agentID: agentID)
+
+        case .formula(_, let result):
+            // 公式结果不落会话/历史：回车即复制并收起启动器（失败/提示行 result 为 nil，不动作）
+            guard let result = result, !result.isEmpty else { return }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(result, forType: .string)
+            LauncherWindowManager.shared.hide()
         }
     }
     

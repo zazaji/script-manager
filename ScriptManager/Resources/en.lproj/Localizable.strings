@@ -110,3 +110,15 @@
 "guide_step1" = "1. Add comments like @Param to your script.";
 "guide_step2" = "2. The app automatically generates a UI for them.";
 "guide_step3" = "3. Click Run to execute with the configured parameters.";
+"launcher_search_prompt" = "Search scripts or apps... (=formula, script_name arg1 arg2)";
+"formula_input_hint" = "Type an expression to calculate, e.g. =(1+2)*sqrt(4)";
+"formula_copy_hint" = "Press Enter to copy the result";
+"formula_error_unexpected_char" = "Unexpected character '%@'";
+"formula_error_incomplete" = "Incomplete expression";
+"formula_error_trailing" = "Unexpected content at the end of expression";
+"formula_error_unknown_function" = "Unknown function '%@'";
+"formula_error_invalid_number" = "Invalid number '%@'";
+"formula_error_arg_count" = "Wrong number of arguments for '%@'";
+"formula_error_div_zero" = "Division by zero";
+"formula_error_factorial" = "Factorial only supports integers from 0 to 170";
+"formula_error_math" = "Math error (NaN or out of range)";

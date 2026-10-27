@@ -43,7 +43,7 @@ import sys
 ## ✨ Features
 
 - 🪄 **Auto UI Generation**: Parses `@Param` comments to automatically generate TextFields, Dropdowns, File Pickers, and Toggles.
-- ⌨️ **Quick Launcher (Spotlight/Alfred-style)**: Summon a global overlay with `Option+Space` to instantly search, filter, and launch scripts, macOS apps, or AI agents. Press `Enter` to run in system terminal, `Cmd+Enter` to run in-app. Supports fuzzy Pinyin search.
+- ⌨️ **Quick Launcher (Spotlight/Alfred-style)**: Summon a global overlay with `Option+Space` to instantly search, filter, and launch scripts, macOS apps, or AI agents. Press `Enter` to run in system terminal, `Cmd+Enter` to run in-app. Supports fuzzy Pinyin search and inline formula calculation (`=1+2*3`).
 - 🤖 **AI Agent Integration**: Trigger AI agents from the launcher with custom prefixes (e.g., `>`, `/`, `@`). Chat inline with streaming responses, history, and per-agent hotkeys.
 - 💻 **Interactive PTY Terminal**: Built-in console with full Pseudo-Terminal (PTY) support. It handles interactive commands like `sudo`, `mysql`, `ssh`, or `npm init` flawlessly.
 - 📁 **Workspace Management**: Organize your scripts in folders. Real-time file monitoring keeps your UI in sync with your file system.
@@ -161,6 +161,7 @@ ScriptManager features a **Spotlight/Alfred-style global overlay** for instant a
 - **Search**: Start typing to filter scripts, macOS apps, and AI tasks. Supports Pinyin fuzzy matching.
 - **Run**: `Enter` runs in your system terminal (Terminal.app or iTerm2). `Cmd+Enter` runs inside the built-in PTY terminal.
 - **AI Agents**: Type an agent prefix (e.g., `>`, `/`, `@`) to chat with AI agents inline.
+- **Formula Calculator**: Type `=` followed by an expression (e.g. `=(1+2)*sqrt(4)`) to evaluate it instantly — supports `+ - * /`, power `^`, factorial `!`, percent `%`, implicit multiplication, constants (`pi`, `e`), and functions (`sqrt`, `sin`, `log`, `min`, `pow`, …). Press `Enter` to copy the result. Full-width symbols (× ÷ （） π √) are normalized automatically.
 - **Tab Autofill**: Press `Tab` to autocomplete the selected item's name into the search field.
 
 ---
