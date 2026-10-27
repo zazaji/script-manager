@@ -161,7 +161,7 @@ ScriptManager features a **Spotlight/Alfred-style global overlay** for instant a
 - **Search**: Start typing to filter scripts, macOS apps, and AI tasks. Supports Pinyin fuzzy matching.
 - **Run**: `Enter` runs in your system terminal (Terminal.app or iTerm2). `Cmd+Enter` runs inside the built-in PTY terminal.
 - **AI Agents**: Type an agent prefix (e.g., `>`, `/`, `@`) to chat with AI agents inline.
-- **Formula Calculator**: Type `=` followed by an expression (e.g. `=(1+2)*sqrt(4)`) to evaluate it instantly — supports `+ - * /`, power `^`, factorial `!`, percent `%`, implicit multiplication, constants (`pi`, `e`), and functions (`sqrt`, `sin`, `log`, `min`, `pow`, …). Press `Enter` to copy the result. Full-width symbols (× ÷ （） π √) are normalized automatically.
+- **Formula Calculator**: Type `=` followed by an expression (e.g. `=(1+2)*sqrt(4)`) to evaluate it instantly — supports `+ - * /`, power `^`/`**`, factorial `!`, percent `%`, implicit multiplication, hex/binary/octal literals (`0xFF`, `0b1010`), degree symbol (`sin(30°)`), constants (`pi`, `e`), and 40+ functions (`sqrt`, `sin`, `log`, `gcd`, `ncr`, `deg2rad`, …). Press `Enter` to copy the result. Full-width symbols (× ÷ （） π √) are normalized automatically.
 - **Tab Autofill**: Press `Tab` to autocomplete the selected item's name into the search field.
 
 ---

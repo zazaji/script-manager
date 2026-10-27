@@ -6,13 +6,16 @@ import Foundation
 /// 每次按键都会被 LauncherViewModel.filterItems() 调用，必须保持微秒级开销。
 ///
 /// 语法支持：
-/// - 四则运算 `+ - * /`、幂 `^`（右结合）、阶乘 `!`（后缀）、一元正负号、括号
+/// - 四则运算 `+ - * /`、幂 `^` 或 `**`（右结合）、阶乘 `!`（后缀）、一元正负号、括号
 /// - 隐式乘法：`2pi`、`(1+2)(3+4)`、`2(3+4)`
 /// - 百分比后缀：`50%` == 0.5（取模因此只能用 `mod(a,b)`，避免 `10%3` 的歧义）
-/// - 常量：`pi/π`、`e`、`tau`、`phi`；函数与常量名大小写不敏感
-/// - 函数：sin cos tan asin acos atan sinh cosh tanh sqrt cbrt ln log log2 exp
-///         abs round floor ceil min max pow mod（min/max 变长；函数后括号可省略：`sqrt9` == `sqrt(9)`）
-/// - 全角/数学符号归一化：＝ ＋ － × ÷ （ ） ， ％ ． ０-９ π √ ² ³
+/// - 进制字面量：十六进制 `0xFF`、二进制 `0b1010`、八进制 `0o17`
+/// - 角度：常量 `deg`（1° 的弧度值）与符号 `°`——`sin(30°)`；转换函数 `deg2rad`/`rad2deg`
+/// - 常量：`pi/π`、`e`、`tau`、`phi`、`deg`；函数与常量名大小写不敏感
+/// - 函数（40+）：三角/反三角（含双曲、atan2）、sqrt/cbrt/root、ln/log(可选底数)/log2、
+///   exp/abs/sign/round/floor/ceil/trunc、min/max/hypot/pow/mod、gcd/lcm/ncr/npr、
+///   gamma/lgamma、deg2rad/rad2deg（函数后括号可省略：`sqrt9` == `sqrt(9)`）
+/// - 全角/数学符号归一化：＝ ＋ － × ÷ （ ） ， ％ ． ０-９ π √ ² ³ °
 public enum FormulaEvaluator {
 
     public enum FormulaError: Error, Equatable {
@@ -95,9 +98,14 @@ public enum FormulaEvaluator {
             case "√": out.append("sqrt")
             case "²": out.append("^2")
             case "³": out.append("^3")
+            case "°": out.append("*deg")
             case "。": break // 中文句末标点，静默吞掉
             default: out.append(ch)
             }
+        }
+        // `**` 幂等价写法归一为 ^（避免分词后产生两个相邻乘号导致解析错误）
+        while out.contains("**") {
+            out = out.replacingOccurrences(of: "**", with: "^")
         }
         return out
     }
@@ -124,6 +132,7 @@ public enum FormulaEvaluator {
     }
 
     private static func tokenizeNumber(_ s: String, from start: String.Index) throws -> (Token, String.Index) {
+        if let radix = try tokenizeRadix(s, from: start) { return radix }
         var end = start
         var seenDot = false
         while end < s.endIndex {
@@ -157,6 +166,31 @@ public enum FormulaEvaluator {
 
     private static func isASCIIDigit(_ ch: Character) -> Bool {
         ch.isASCII && ch.isNumber
+    }
+
+    /// 进制字面量：0xFF / 0b1010 / 0o17（前缀大小写均可）。非进制前缀返回 nil 走十进制解析；
+    /// 直接在 Double 上累加而不是 Int 转换，超长十六进制不崩溃、仅按 Double 精度截断
+    private static func tokenizeRadix(_ s: String, from start: String.Index) throws -> (Token, String.Index)? {
+        guard s[start] == "0" else { return nil }
+        let prefixIndex = s.index(after: start)
+        guard prefixIndex < s.endIndex else { return nil }
+        let radix: Int
+        switch s[prefixIndex] {
+        case "x", "X": radix = 16
+        case "b", "B": radix = 2
+        case "o", "O": radix = 8
+        default: return nil
+        }
+        var i = s.index(after: prefixIndex)
+        var value = 0.0
+        var count = 0
+        while i < s.endIndex, let digit = s[i].hexDigitValue, digit < radix {
+            value = value * Double(radix) + Double(digit)
+            i = s.index(after: i)
+            count += 1
+        }
+        guard count > 0 else { throw FormulaError.invalidNumber(String(s[start...prefixIndex])) }
+        return (.number(value), i)
     }
 
     /// 标识符拆分回退："sqrt9" → sqrt(9)、"e2" → e*2。
@@ -350,6 +384,7 @@ public enum FormulaEvaluator {
         "e": M_E,
         "tau": 2 * .pi,
         "phi": (1 + sqrt(5)) / 2,
+        "deg": .pi / 180, // 1° 的弧度值：sin(30°) → sin(30*deg)
     ]
 
     private static let functions: [String: (arity: ClosedRange<Int>, apply: ([Double]) -> Double)] = [
@@ -359,22 +394,103 @@ public enum FormulaEvaluator {
         "asin": (1...1, { asin($0[0]) }),
         "acos": (1...1, { acos($0[0]) }),
         "atan": (1...1, { atan($0[0]) }),
+        "atan2": (2...2, { atan2($0[0], $0[1]) }),
         "sinh": (1...1, { sinh($0[0]) }),
         "cosh": (1...1, { cosh($0[0]) }),
         "tanh": (1...1, { tanh($0[0]) }),
+        "asinh": (1...1, { asinh($0[0]) }),
+        "acosh": (1...1, { acosh($0[0]) }),
+        "atanh": (1...1, { atanh($0[0]) }),
         "sqrt": (1...1, { sqrt($0[0]) }),
         "cbrt": (1...1, { cbrt($0[0]) }),
+        "root": (2...2, { args in
+            let (x, n) = (args[0], args[1])
+            guard n != 0 else { return .nan }
+            if x < 0 {
+                // 奇次方根允许负底数：root(-27, 3) == -3
+                return n.truncatingRemainder(dividingBy: 2) == 1 ? -pow(-x, 1 / n) : .nan
+            }
+            return pow(x, 1 / n)
+        }),
         "ln": (1...1, { log($0[0]) }),
-        "log": (1...1, { log10($0[0]) }), // 计算器惯例：log 为常用对数，自然对数用 ln
+        "log": (1...2, { args in
+            // 计算器惯例：log 为常用对数，自然对数用 ln；log(8, 2) 允许显式底数
+            args.count == 1
+                ? log10(args[0])
+                : (log(args[1]) == 0 ? .nan : log(args[0]) / log(args[1]))
+        }),
         "log2": (1...1, { log2($0[0]) }),
         "exp": (1...1, { exp($0[0]) }),
         "abs": (1...1, { abs($0[0]) }),
+        "sign": (1...1, { args in
+            let x = args[0]
+            return x > 0 ? 1 : (x < 0 ? -1 : 0)
+        }),
         "round": (1...1, { $0[0].rounded() }),
         "floor": (1...1, { floor($0[0]) }),
         "ceil": (1...1, { ceil($0[0]) }),
+        "trunc": (1...1, { $0[0].rounded(.towardZero) }),
+        "gamma": (1...1, { tgamma($0[0]) }),
+        "lgamma": (1...1, { lgamma($0[0]) }),
+        "gcd": (2...Int.max, { args in
+            var g = 0
+            for x in args {
+                guard let v = FormulaEvaluator.toInt(x) else { return .nan }
+                g = FormulaEvaluator.gcdPair(g, abs(v))
+            }
+            return Double(g)
+        }),
+        "lcm": (2...Int.max, { args in
+            var l = 1
+            for x in args {
+                guard let v = FormulaEvaluator.toInt(x), v != 0 else { return .nan }
+                l = l / FormulaEvaluator.gcdPair(l, abs(v)) * abs(v)
+            }
+            return Double(l)
+        }),
+        "ncr": (2...2, { args in
+            // 组合数 C(n,r)：中间过程保持整数，循环上限护栏防超大输入卡死
+            guard let n = FormulaEvaluator.toInt(args[0]), let r = FormulaEvaluator.toInt(args[1]),
+                  n >= 0, r >= 0, r <= 10_000_000 else { return .nan }
+            guard r <= n else { return 0 }
+            let k = min(r, n - r)
+            var result = 1.0
+            for i in 1...k {
+                result = result * Double(n - k + i) / Double(i)
+            }
+            return result
+        }),
+        "npr": (2...2, { args in
+            guard let n = FormulaEvaluator.toInt(args[0]), let r = FormulaEvaluator.toInt(args[1]),
+                  n >= 0, r >= 0, r <= 10_000_000 else { return .nan }
+            var result = 1.0
+            for i in 0..<r {
+                result *= Double(n - i)
+            }
+            return result
+        }),
         "min": (2...Int.max, { $0.min() ?? .nan }),
         "max": (2...Int.max, { $0.max() ?? .nan }),
+        "hypot": (2...Int.max, { args in args.dropFirst().reduce(args[0]) { hypot($0, $1) } }),
         "pow": (2...2, { pow($0[0], $0[1]) }),
         "mod": (2...2, { $0[0].truncatingRemainder(dividingBy: $0[1]) }),
+        "deg2rad": (1...1, { $0[0] * .pi / 180 }),
+        "rad2deg": (1...1, { $0[0] * 180 / .pi }),
     ]
+
+    /// 整数护栏：gcd/lcm/ncr/npr 需要整数参数；先验证整数性与 2^53 精度上限，
+    /// 避免 Int(x) 对超大 Double 直接运行时崩溃
+    private static func toInt(_ x: Double) -> Int? {
+        guard x.rounded() == x, abs(x) <= 9_007_199_254_740_992 else { return nil }
+        return Int(x)
+    }
+
+    private static func gcdPair(_ a: Int, _ b: Int) -> Int {
+        var a = a
+        var b = b
+        while b != 0 {
+            (a, b) = (b, a % b)
+        }
+        return a
+    }
 }
