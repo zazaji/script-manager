@@ -199,6 +199,16 @@ public class WorkspaceViewModel: ObservableObject {
             scanWorkspace(url: url)
         }
     }
+
+    /// 全量刷新：应用列表与工作区脚本都重扫，不受主界面当前标签页影响。
+    /// refresh() 只按 currentTab 二选一，启动器等同时依赖两侧数据的场景必须用本方法
+    public func refreshAll() {
+        loadApplications()
+        if let path = selectedWorkspacePath {
+            let url = URL(fileURLWithPath: path)
+            scanWorkspace(url: url)
+        }
+    }
     
     public func createNewScript(
         name: String,

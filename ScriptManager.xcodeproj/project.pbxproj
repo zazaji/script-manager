@@ -10,9 +10,22 @@
 		8CC050322F65A36B00903EC0 /* ScriptManager.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScriptManager.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		8CC050412F66A0B100903EC0 /* Exceptions for Info.plist in ScriptManager target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 8CC050312F65A36B00903EC0 /* ScriptManager */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		8CC050342F65A36B00903EC0 /* ScriptManager */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8CC050412F66A0B100903EC0 /* Exceptions for Info.plist in ScriptManager target */,
+			);
 			path = ScriptManager;
 			sourceTree = "<group>";
 		};
