@@ -1,0 +1,9 @@
+/views/
+temp/
+build/
+**/__pycache__/
+*.txt
+upload_to_github.sh
+*.zip
+.gitignore
+.DS_Store
