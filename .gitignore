@@ -7,3 +7,4 @@ upload_to_github.sh
 *.zip
 .gitignore
 .DS_Store
+xcuserdata/
