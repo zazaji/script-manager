@@ -44,6 +44,9 @@ public class LauncherViewModel: ObservableObject {
     @Published public var items: [LauncherItem] = []
     @Published public var selectedIndex: Int = 0
     @Published public var refreshState: LauncherRefreshState = .idle
+
+    /// 公式行回车复制后的行内反馈状态；任何搜索文本变化都会重置
+    @Published public var formulaCopied: Bool = false
     
     @Published public var currentSession: ExecutionSession? = nil {
         didSet {
@@ -125,6 +128,7 @@ public class LauncherViewModel: ObservableObject {
     }
     
     public func filterItems() {
+        formulaCopied = false
         var newItems: [LauncherItem] = []
         
         var matchedAgent: AIAgentConfiguration? = nil
@@ -403,11 +407,12 @@ public class LauncherViewModel: ObservableObject {
             executeAITaskInline(prompt: prompt, agentID: agentID)
 
         case .formula(_, let result):
-            // 公式结果不落会话/历史：回车即复制并收起启动器（失败/提示行 result 为 nil，不动作）
+            // 架构级修复：回车复制后浮层保持打开并显示"已复制"反馈——
+            // 之前直接 hide()，用户视角是"按回车整个应用就退出了"（应用无 Dock 图标，浮层即全部 UI）
             guard let result = result, !result.isEmpty else { return }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(result, forType: .string)
-            LauncherWindowManager.shared.hide()
+            formulaCopied = true
         }
     }
     

@@ -44,7 +44,8 @@ public struct LauncherView: View {
                         onUp: viewModel.moveUp,
                         onDown: viewModel.moveDown,
                         onEnter: { inTerminal in viewModel.executeSelected(inTerminal: inTerminal) },
-                        onTab: viewModel.autoFill
+                        onTab: viewModel.autoFill,
+                        onEsc: { LauncherWindowManager.shared.hide() }
                     )
                     .frame(maxWidth: .infinity, minHeight: 50)
 
@@ -142,7 +143,11 @@ public struct LauncherView: View {
                                         let idx = viewModel.selectedIndex
                                         let isSel = viewModel.items.indices.contains(idx) && viewModel.items[idx].id == item.id
                                         
-                                        LauncherItemRow(item: item, isSelected: isSel)
+                                        LauncherItemRow(
+                                            item: item,
+                                            isSelected: isSel,
+                                            formulaCopied: viewModel.formulaCopied && item.id == "formula_current"
+                                        )
                                             .id(item.id)
                                             .onTapGesture {
                                                 tapAction(for: item)
@@ -200,6 +205,7 @@ public struct LauncherView: View {
 struct LauncherItemRow: View {
     let item: LauncherItem
     let isSelected: Bool
+    var formulaCopied: Bool = false
 
     private var isScript: Bool {
         if case .script = item.type { return true }
@@ -252,9 +258,9 @@ struct LauncherItemRow: View {
                 }
                 
                 if let hint = item.parametersHint, !hint.isEmpty {
-                    Text(hint)
+                    Text(formulaCopied ? "✓ " + Constants.UI.copiedToast : hint)
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundColor(isSelected ? .white.opacity(0.9) : Color(NSColor.systemBlue).opacity(0.8))
+                        .foregroundColor(formulaCopied ? .green : (isSelected ? .white.opacity(0.9) : Color(NSColor.systemBlue).opacity(0.8)))
                         .lineLimit(1)
                 }
             }
@@ -367,6 +373,7 @@ struct LauncherTextField: NSViewRepresentable {
     var onDown: () -> Void
     var onEnter: (Bool) -> Void
     var onTab: () -> Void
+    var onEsc: () -> Void
 
     func makeNSView(context: Context) -> NSTextField {
         let tf = FocusableTextField()
@@ -446,6 +453,10 @@ struct LauncherTextField: NSViewRepresentable {
                 return true
             } else if selector == #selector(NSResponder.insertTab(_:)) {
                 DispatchQueue.main.async { self.parent.onTab() }
+                return true
+            } else if selector == #selector(NSResponder.cancelOperation(_:)) {
+                // Esc 关闭启动器（此前无处理，浮层只能靠失焦或快捷键收起）
+                DispatchQueue.main.async { self.parent.onEsc() }
                 return true
             }
             return false

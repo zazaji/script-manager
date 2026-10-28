@@ -9,7 +9,7 @@
 
 1. **脚本 GUI 化**：解析 Bash / Python / Node.js / Ruby 脚本中的 `@Param` 注释，自动生成参数表单并执行（支持 App 内 PTY 终端或唤起系统 Terminal/iTerm）
 2. **快速启动器（Alfred 风格）**：全局快捷键 `Cmd+Space` 唤起浮动搜索栏，可搜脚本、应用、AI 任务，带独立刷新状态机
-3. **公式计算**：启动器输入 `=`（含全角 `＝`）前缀即时求值——四则、幂 `^`/`**`、阶乘 `!`、百分比 `%`、隐式乘法、进制字面量 `0x/0b/0o`、角度符号 `°`、40+ 函数与常量、全角符号归一化，回车复制结果
+3. **公式计算**：启动器输入 `=`（含全角 `＝`）前缀即时求值——四则、幂 `^`/`**`、阶乘 `!`、百分比 `%`、隐式乘法、进制字面量 `0x/0b/0o`、角度符号 `°`、40+ 函数与常量、全角符号归一化；回车复制结果（浮层保持打开并就地显示"已复制"，Esc 或失焦关闭）
 4. **AI Agent 集成**：按前缀路由（如输入 `/` 进入某 Agent），任务经 API 网关执行，日志实时落到终端会话与悬浮窗
 5. **双语界面**：中文 / 英文运行时切换
 
@@ -84,7 +84,7 @@ WorkspaceViewModel.shared ◄── WorkspaceManager(目录监听) ◄── 磁
 AI 链路：  LauncherView 前缀匹配 → LauncherViewModel.executeAITaskInline
          → AIAgentService(API 网关) → ExecutionSession 日志
 公式链路：LauncherView 前缀 = → LauncherViewModel.filterItems 内联求值
-         → FormulaEvaluator(纯函数) → 回车复制结果到剪贴板
+         → FormulaEvaluator(纯函数) → 回车复制结果到剪贴板（浮层保持打开，Esc/失焦关闭）
 ```
 
 - **WorkspaceViewModel 是脚本与应用的唯一数据源**。任何视图/VM 需要这两类数据时，订阅它的
