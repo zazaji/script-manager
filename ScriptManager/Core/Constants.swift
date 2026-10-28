@@ -184,7 +184,7 @@ public struct Constants {
         public static var backToSearchButton: String { localized("back_to_search_button", value: "Back to Search") }
 
         // 公式计算（启动器 = 前缀）：错误文案集中把 FormulaError 映射为本地化字符串
-        public static var formulaInputHint: String { localized("formula_input_hint", value: "Type an expression to calculate, e.g. =(1+2)*sqrt(4)") }
+        public static var formulaInputHint: String { localized("formula_input_hint", value: "Type an expression or equation, e.g. =(1+2)*sqrt(4) or x^2=4") }
         public static var formulaCopyHint: String { localized("formula_copy_hint", value: "Press Enter to copy the result") }
 
         public static func formulaErrorText(_ error: FormulaEvaluator.FormulaError) -> String {
@@ -209,6 +209,14 @@ public struct Constants {
                 return localized("formula_error_factorial", value: "Factorial only supports integers from 0 to 170")
             case .mathError:
                 return localized("formula_error_math", value: "Math error (NaN or out of range)")
+            case .noUnknownVariable:
+                return localized("formula_error_no_unknown", value: "No variable to solve for")
+            case .multipleUnknownVariables(let names):
+                return String(format: localized("formula_error_multiple_unknowns", value: "Multiple variables in equation: %@"), names)
+            case .multipleEquals:
+                return localized("formula_error_multiple_equals", value: "At most one '=' is allowed")
+            case .noRootFound:
+                return localized("formula_error_no_root", value: "No real solution found")
             }
         }
 

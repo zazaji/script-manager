@@ -284,7 +284,13 @@ public class LauncherViewModel: ObservableObject {
             return base(name: Constants.UI.formulaInputHint, result: nil, description: nil, hint: nil)
         }
         do {
-            let result = FormulaEvaluator.format(try FormulaEvaluator.evaluate(expression))
+            // 含未知变量或等号的表达式走数值解方程（如 x^2=4、年金现值临界利率）
+            let result: String
+            if FormulaEvaluator.needsSolving(expression) {
+                result = try FormulaEvaluator.solve(expression).displayText
+            } else {
+                result = FormulaEvaluator.format(try FormulaEvaluator.evaluate(expression))
+            }
             return base(
                 name: result,
                 result: result,

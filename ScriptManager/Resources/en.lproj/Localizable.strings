@@ -111,7 +111,7 @@
 "guide_step2" = "2. The app automatically generates a UI for them.";
 "guide_step3" = "3. Click Run to execute with the configured parameters.";
 "launcher_search_prompt" = "Search scripts or apps... (=formula, script_name arg1 arg2)";
-"formula_input_hint" = "Type an expression to calculate, e.g. =(1+2)*sqrt(4)";
+"formula_input_hint" = "Type an expression or equation, e.g. =(1+2)*sqrt(4) or x^2=4";
 "formula_copy_hint" = "Press Enter to copy the result";
 "formula_error_unexpected_char" = "Unexpected character '%@'";
 "formula_error_incomplete" = "Incomplete expression";
@@ -122,3 +122,7 @@
 "formula_error_div_zero" = "Division by zero";
 "formula_error_factorial" = "Factorial only supports integers from 0 to 170";
 "formula_error_math" = "Math error (NaN or out of range)";
+"formula_error_no_unknown" = "No variable to solve for";
+"formula_error_multiple_unknowns" = "Multiple variables in equation: %@";
+"formula_error_multiple_equals" = "At most one '=' is allowed";
+"formula_error_no_root" = "No real solution found";

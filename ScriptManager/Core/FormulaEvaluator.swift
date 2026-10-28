@@ -15,6 +15,9 @@ import Foundation
 /// - 函数（40+）：三角/反三角（含双曲、atan2）、sqrt/cbrt/root、ln/log(可选底数)/log2、
 ///   exp/abs/sign/round/floor/ceil/trunc、min/max/hypot/pow/mod、gcd/lcm/ncr/npr、
 ///   gamma/lgamma、deg2rad/rad2deg（函数后括号可省略：`sqrt9` == `sqrt(9)`）
+/// - 解方程：含恰好一个未知变量的等式（或省略 =0 的表达式）自动数值求根——
+///   扫描变号区间 + 二分收敛 + 牛顿处理重根，奇点按未定义跳过；
+///   `x^2=4` → `x ≈ -2, x ≈ 2`，`-3800+300*((1+i)^18-1)/(i*(1+i)^18)=0` → `i ≈ 0.0399`
 /// - 全角/数学符号归一化：＝ ＋ － × ÷ （ ） ， ％ ． ０-９ π √ ² ³ °
 public enum FormulaEvaluator {
 
@@ -29,6 +32,10 @@ public enum FormulaEvaluator {
         case divisionByZero
         case factorialDomain
         case mathError
+        case noUnknownVariable
+        case multipleUnknownVariables(String)
+        case multipleEquals
+        case noRootFound
     }
 
     private enum Token: Equatable {
@@ -42,7 +49,240 @@ public enum FormulaEvaluator {
     public static func evaluate(_ rawExpression: String) throws -> Double {
         let normalized = normalize(rawExpression)
         guard !normalized.isEmpty else { throw FormulaError.emptyExpression }
+        let tokens = try tokenizeAll(normalized)
+        return try evaluateTokens(tokens, variables: [:])
+    }
 
+    /// 结果展示格式：12 位有效数字抹平浮点噪声（0.1+0.2 → 0.3），指数形式去掉多余的 +
+    public static func format(_ value: Double) -> String {
+        guard value.isFinite else { return "NaN" }
+        if value == 0 { return "0" } // 同时吞掉 -0
+        return String(format: "%.12g", value)
+            .replacingOccurrences(of: "e+", with: "e")
+    }
+
+    // MARK: - 方程求解（恰好一个未知数，数值法）
+
+    public struct EquationSolution {
+        public let variable: String
+        public let roots: [Double]
+
+        public var displayText: String {
+            roots.map { "\(variable) ≈ \(String(format: "%.6g", $0))" }.joined(separator: ", ")
+        }
+    }
+
+    /// 表达式含未知变量或等号时走求解路径；分词失败返回 false，让 evaluate 给出准确语法错误
+    public static func needsSolving(_ raw: String) -> Bool {
+        guard let tokens = try? tokenizeAll(normalize(raw)) else { return false }
+        if tokens.contains(.op("=")) { return true }
+        return !collectUnknownIdentifiers(in: tokens).isEmpty
+    }
+
+    /// 数值解方程：`lhs=rhs`，或省略 `=0` 直接给表达式（如 `x^2-4`）。
+    /// 未知变量取"非常量、非函数"的标识符；多个未知数直接报错而不是猜。
+    public static func solve(_ raw: String) throws -> EquationSolution {
+        let normalized = normalize(raw)
+        guard !normalized.isEmpty else { throw FormulaError.emptyExpression }
+        let tokens = try tokenizeAll(normalized)
+
+        let eqIndices = tokens.indices.filter { tokens[$0] == .op("=") }
+        guard eqIndices.count <= 1 else { throw FormulaError.multipleEquals }
+
+        let unknowns = collectUnknownIdentifiers(in: tokens)
+        guard !unknowns.isEmpty else { throw FormulaError.noUnknownVariable }
+        guard unknowns.count == 1 else {
+            throw FormulaError.multipleUnknownVariables(unknowns.joined(separator: ", "))
+        }
+        let variable = unknowns[0]
+
+        let f: (Double) throws -> Double
+        if let eq = eqIndices.first {
+            let lhs = Array(tokens[..<eq])
+            let rhs = Array(tokens[(eq + 1)...])
+            guard !lhs.isEmpty, !rhs.isEmpty else { throw FormulaError.unexpectedEnd }
+            f = { x in
+                try evaluateTokens(lhs, variables: [variable: x])
+                    - evaluateTokens(rhs, variables: [variable: x])
+            }
+        } else {
+            f = { try evaluateTokens(tokens, variables: [variable: $0]) }
+        }
+
+        var roots = try scanForRoots(f)
+        // 最接近 0 的根优先展示（金融临界利率、主值根通常在靠前位置）
+        roots.sort { abs($0) < abs($1) }
+        roots = dedupe(roots)
+        guard !roots.isEmpty else { throw FormulaError.noRootFound }
+        return EquationSolution(variable: variable, roots: Array(roots.prefix(4)))
+    }
+
+    /// 扫描计划：先在教育/工程常用区间精细扫，无根再逐级放宽；任一档找到根即止，保证击键延迟可控
+    private static let scanPlans: [(lo: Double, hi: Double, step: Double)] = [
+        (-10, 10, 0.01),
+        (-1_000, 1_000, 0.5),
+        (-100_000, 100_000, 100),
+    ]
+
+    private static func scanForRoots(_ f: (Double) throws -> Double) throws -> [Double] {
+        var roots: [Double] = []
+        var maxAbsF = 0.0
+        // 表达式本身的语法错误（如输入未打完）应原样抛出，而不是误报"无实数解"
+        var parseError: FormulaError?
+
+        for plan in scanPlans {
+            var brackets: [(a: Double, b: Double)] = []
+            var nearZeros: [Double] = []
+            var prevX: Double?
+            var prevF: Double?
+
+            var x = plan.lo
+            while x <= plan.hi {
+                do {
+                    let fv = try f(x)
+                    if fv.isFinite {
+                        maxAbsF = max(maxAbsF, abs(fv))
+                        // 重根（无变号）候选：|f| 已到扫描量级的噪声水平
+                        if abs(fv) <= 1e-8 * max(1, maxAbsF) { nearZeros.append(x) }
+                        if let pf = prevF, let px = prevX, pf * fv < 0 {
+                            brackets.append((px, x))
+                        }
+                        prevX = x
+                        prevF = fv
+                    } else {
+                        prevX = nil
+                        prevF = nil
+                    }
+                } catch let error as FormulaError {
+                    switch error {
+                    case .unexpectedEnd, .trailingContent:
+                        if parseError == nil { parseError = error }
+                    default:
+                        break // 奇点/定义域错误：按未定义点处理，断开变号追踪
+                    }
+                    prevX = nil
+                    prevF = nil
+                } catch {
+                    prevX = nil
+                    prevF = nil
+                }
+                x += plan.step
+            }
+
+            for bracket in brackets {
+                if let root = refineBracket(bracket.a, bracket.b, f: f) {
+                    roots.append(root)
+                }
+            }
+            // 重根候选限量防病态表达式拖慢击键；牛顿内部会再做邻域尺度复核
+            for x0 in nearZeros.prefix(50) {
+                if let root = polishNewton(x0, step: plan.step, f: f) {
+                    roots.append(root)
+                }
+            }
+            if !roots.isEmpty { break }
+        }
+
+        if roots.isEmpty, let parseError {
+            throw parseError
+        }
+        return roots
+    }
+
+    /// 二分收敛变号区间，并验证收敛点是真根而非奇点（奇点处 |f| 会远超端点量级）
+    private static func refineBracket(_ a0: Double, _ b0: Double, f: (Double) throws -> Double) -> Double? {
+        var a = a0
+        var b = b0
+        guard var fa = try? f(a), var fb = try? f(b), fa.isFinite, fb.isFinite, fa * fb < 0 else {
+            return nil
+        }
+
+        var mid = a
+        for _ in 0..<200 {
+            mid = (a + b) / 2
+            guard let fm = try? f(mid), fm.isFinite else { return nil }
+            if fm == 0 { return mid }
+            if fa * fm < 0 {
+                b = mid
+                fb = fm
+            } else {
+                a = mid
+                fa = fm
+            }
+            if b - a <= 1e-14 * max(1, abs(mid)) { break }
+        }
+        guard let fRoot = try? f(mid), fRoot.isFinite else { return nil }
+        let tolerance = max(10 * max(abs(fa), abs(fb)), 1e-9 * max(1, abs(fRoot)))
+        guard abs(fRoot) <= tolerance else { return nil }
+        return mid
+    }
+
+    /// 牛顿迭代处理无变号的重根（如 (x-2)^2）。
+    /// 邻域尺度复核：候选点的 |f| 必须显著小于两侧 2×step 处的值——
+    /// 排除平坦函数（x^2+1 在粗档扫描时 maxAbsF 被大 |x| 撑大导致 x=0 误报）的假候选
+    private static func polishNewton(_ x0: Double, step: Double, f: (Double) throws -> Double) -> Double? {
+        let span = 2 * step
+        let neighborScale = max(
+            abs((try? f(x0 - span)) ?? 0),
+            abs((try? f(x0 + span)) ?? 0),
+            1e-300
+        )
+        guard let fx0 = try? f(x0), fx0.isFinite, abs(fx0) <= 1e-8 * max(1, neighborScale) else {
+            return nil
+        }
+
+        var x = x0
+        for _ in 0..<40 {
+            guard let fx = try? f(x), fx.isFinite, fx != 0 else { break }
+            let h = 1e-7 * max(1, abs(x))
+            guard let fp = try? f(x + h), let fm = try? f(x - h),
+                  fp.isFinite, fm.isFinite else { return nil }
+            let derivative = (fp - fm) / (2 * h)
+            guard abs(derivative) > 1e-300 else { break }
+            let stepSize = fx / derivative
+            if abs(stepSize) > 1e3 * max(1, abs(x)) { return nil } // 步长失控，不是根
+            x -= stepSize
+            if abs(stepSize) <= 1e-13 * max(1, abs(x)) { break }
+        }
+        guard let fx = try? f(x), fx.isFinite else { return nil }
+        // 验收用最终收敛点的邻域尺度重新复核——初始候选点若靠近奇点，
+        // 其邻域尺度被奇点值撑大，会放行牛顿游走产生的假根
+        let finalScale = max(
+            abs((try? f(x - span)) ?? 0),
+            abs((try? f(x + span)) ?? 0),
+            1e-300
+        )
+        guard abs(fx) <= 1e-8 * max(1, finalScale) else { return nil }
+        return x
+    }
+
+    private static func dedupe(_ sortedRoots: [Double]) -> [Double] {
+        var result: [Double] = []
+        for root in sortedRoots
+        where !result.contains(where: { abs(root - $0) <= 1e-6 * max(1, abs(root)) }) {
+            result.append(root)
+        }
+        return result
+    }
+
+    /// 收集未知变量名：排除常量、已知函数、以及"函数名+数字后缀"可解析的标识符（如 sqrt9）
+    private static func collectUnknownIdentifiers(in tokens: [Token]) -> [String] {
+        var seen = Set<String>()
+        var order: [String] = []
+        for token in tokens {
+            guard case .identifier(let name) = token else { continue }
+            if constants[name] != nil || functions[name] != nil { continue }
+            if resolveIdentifierWithNumberSuffix(name) != nil { continue }
+            if seen.insert(name).inserted {
+                order.append(name)
+            }
+        }
+        return order
+    }
+
+    // MARK: - 归一化与分词
+
+    private static func tokenizeAll(_ normalized: String) throws -> [Token] {
         var tokens: [Token] = []
         var index = normalized.startIndex
         while index < normalized.endIndex {
@@ -55,23 +295,16 @@ public enum FormulaEvaluator {
             index = next
         }
         guard !tokens.isEmpty else { throw FormulaError.emptyExpression }
+        return tokens
+    }
 
-        var parser = Parser(tokens: tokens)
+    private static func evaluateTokens(_ tokens: [Token], variables: [String: Double]) throws -> Double {
+        var parser = Parser(tokens: tokens, variables: variables)
         let value = try parser.parseExpression()
         try parser.expectEnd()
         guard value.isFinite else { throw FormulaError.mathError }
         return value
     }
-
-    /// 结果展示格式：12 位有效数字抹平浮点噪声（0.1+0.2 → 0.3），指数形式去掉多余的 +
-    public static func format(_ value: Double) -> String {
-        guard value.isFinite else { return "NaN" }
-        if value == 0 { return "0" } // 同时吞掉 -0
-        return String(format: "%.12g", value)
-            .replacingOccurrences(of: "e+", with: "e")
-    }
-
-    // MARK: - 归一化与分词
 
     /// 中文输入法产生的全角字符与常见数学符号统一映射为 ASCII 语法符号
     private static func normalize(_ raw: String) -> String {
@@ -124,7 +357,7 @@ public enum FormulaEvaluator {
             return (.identifier(String(s[start..<end]).lowercased()), end)
         }
         switch ch {
-        case "+", "-", "*", "/", "%", "^", "!", "(", ")", ",":
+        case "+", "-", "*", "/", "%", "^", "!", "(", ")", ",", "=":
             return (.op(ch), s.index(after: start))
         default:
             throw FormulaError.unexpectedCharacter(ch)
@@ -217,6 +450,7 @@ public enum FormulaEvaluator {
 
     private struct Parser {
         let tokens: [Token]
+        var variables: [String: Double] = [:]
         var pos = 0
 
         mutating func parseExpression() throws -> Double {
@@ -301,6 +535,7 @@ public enum FormulaEvaluator {
                 return value
             case .identifier(let name):
                 if let constant = FormulaEvaluator.constants[name] { return constant }
+                if let value = variables[name] { return value }
                 if let signature = FormulaEvaluator.functions[name] {
                     let args = try parseArguments()
                     guard signature.arity.contains(args.count) else {

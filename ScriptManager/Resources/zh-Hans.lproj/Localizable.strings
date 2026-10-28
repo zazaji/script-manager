@@ -111,7 +111,7 @@
 "guide_step2" = "2. 应用会自动为您生成配置界面。";
 "guide_step3" = "3. 点击运行，即可使用配置好的参数执行。";
 "launcher_search_prompt" = "搜索脚本或应用...（=公式，脚本名 参数1 参数2）";
-"formula_input_hint" = "输入表达式进行计算，如 =(1+2)*sqrt(4)";
+"formula_input_hint" = "输入表达式或方程，如 =(1+2)*sqrt(4)、x^2=4";
 "formula_copy_hint" = "按回车复制结果";
 "formula_error_unexpected_char" = "无法识别的字符 '%@'";
 "formula_error_incomplete" = "表达式不完整";
@@ -122,3 +122,7 @@
 "formula_error_div_zero" = "除数不能为 0";
 "formula_error_factorial" = "阶乘仅支持 0 到 170 的整数";
 "formula_error_math" = "数学错误（NaN 或超出范围）";
+"formula_error_no_unknown" = "方程中未找到未知数";
+"formula_error_multiple_unknowns" = "方程包含多个未知数: %@";
+"formula_error_multiple_equals" = "方程最多只能包含一个等号";
+"formula_error_no_root" = "未找到实数解";
